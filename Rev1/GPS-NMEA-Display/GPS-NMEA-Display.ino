@@ -1,5 +1,3 @@
-
-
 // *
 // Example program to illustrate how to display time on an RGB display based on NMEA data received via GPS.
 // Currently coded for PDT - you'll need to adjust for your timezone.
@@ -18,24 +16,24 @@
 
    If UsbDebugCommInterface is being used you can specify any baudrate.
 */
+
+// #define HCMS_DISPLAY_REV  1         // '2nd' rev of board
+
 #include <Arduino.h>
-// #include <Wire.h>
-#include "wiring_private.h"
-#include <ThreadDebug.h>
+
+
+// #include <ThreadDebug.h>
 //
 // UartDebugCommInterface debugComm(SERIAL1_TX, SERIAL1_RX, 230400);
 // ThreadDebug            threadDebug(&debugComm, DEBUG_BREAK_IN_SETUP);
 
-USBSerial   SerialUSB1(false, "DebugPort");
-UsbDebugCommInterface  debugComm(&SerialUSB1);
+// UsbDebugCommInterface  debugComm(&SerialUSB);
 // ThreadDebug            threadDebug(&debugComm, DEBUG_NO_BREAK_IN_SETUP);
-ThreadDebug            threadDebug(&debugComm, DEBUG_BREAK_IN_SETUP);
+// ThreadDebug            threadDebug(&debugComm, DEBUG_BREAK_IN_SETUP);
 
-#define PORTENTA_H7 1
+// #define PORTENTA_H7 1
 // uncomment following if using the RGB Matrix Display From Arduino
-#define USING_ARDUINO_MATRIX 1
-
-
+// #define USING_ARDUINO_MATRIX 1
 
 #ifndef PORTENTA_H7
 #include <SPI.h>
@@ -45,11 +43,11 @@ ThreadDebug            threadDebug(&debugComm, DEBUG_BREAK_IN_SETUP);
 #include <Arduino_LSM6DS3.h>
 #include <LedDisplay.h>
 #include <TemperatureZero.h>
-
-
+#include <SAMD21turboPWM.h>
 
 #else
 #include <WiFi.h>                   // for portenta
+
 #include <WiFiUdp.h>
 #endif
 
@@ -61,22 +59,14 @@ ThreadDebug            threadDebug(&debugComm, DEBUG_BREAK_IN_SETUP);
 
 #include "SECRET.H"
 
-static gpio_t gpio;
-
-#define FASTLED_FORCE_SOFTWARE_SPI
-// #include <FastLED.h>
-#define DATA_PIN A5
-#define CLOCK_PIN A4
-#define NUM_LEDS 84
-// CRGB leds[NUM_LEDS];
-// #define USE_IMU_CODE 1      // modify for other than Nano 33 IOT
+#define USE_IMU_CODE 1      // modify for other than Nano 33 IOT
 
 // #define TEST_MODE 1       // If using the Hercules tool for debug
 #define NO_TEST_MODE 1      // Running in normal mode using a GPS receiver (i.e. Themis' GPS via WiFi)
 
 #define UTC_OFFSET  7       // this is PDT, so -8 from UTC 8 in Fall, 7 in Spring - currently 'manual'
 
-// #define USING_HCMS_DISPLAY 1      // if using HCMS Display
+#define USING_HCMS_DISPLAY 1      // if using HCMS Display
 
 // uncomment following if using the Lumex LDM-6432 RGB Display
 // #define USING_LUMEX_DISPLAY 1
@@ -87,7 +77,10 @@ static gpio_t gpio;
 
 WiFiUDP _udp;
 
-REDIRECT_STDOUT_TO(Serial);
+static unsigned int dutyCycle = 0;
+static unsigned char flip_flop = 0;
+
+// REDIRECT_STDOUT_TO(Serial1);
 
 #define SERIAL_COUNTER_TIME_OUT 5000    // so serial port doesn't hang the board
 #define SERIAL_CTR_TIME_OUT 5
@@ -109,7 +102,7 @@ const char* host = "239.192.1.2";    // this is address of PC w/UDP server
 IPAddress timeServer(239, 192, 1, 2);   // this is address of PC w/UDP server
 #endif
 // to test
-
+TurboPWM pwm;
 #if TEST_MODE
 #ifdef PORTENTA_H7
 char* ssid     = SECRET_WIFI_NAME_TEST_MODE;
@@ -206,17 +199,33 @@ static char local_counter = 0;
 #define registerSelect 3       // the display's register select pin
 #define clockPin 4             // the display's clock pin
 #define enable 5               // the display's chip enable pin
+#if HCMS_DISPLAY_REV
+// #define reset 6              // the display's reset pin
+#define blank 6                 // the display's blank pin
+#define reset 7              // the display's reset pin
+dutyCycle = 600;
+#else
 #define reset 6              // the display's reset pin
+
+
+#endif
 
 #define SHDN  14                    // A0
 #define HIGH_CURRENT_MODE 15        // A1 XXX:::XXX relocate to digital pins
 
+
+
 #define displayLength 8        // number of bytes needed to pad the string
 
 // create an instance of the LED display:
-#ifndef PORTENTA_H7
+#ifdef USING_HCMS_DISPLAY
+#if HCMS_DISPLAY_REV
 LedDisplay myDisplay = LedDisplay(dataPin, registerSelect, clockPin,
-				  enable, reset, displayLength);
+				  enable, reset, blank, displayLength);
+#else
+LedDisplay myDisplay = LedDisplay(dataPin, registerSelect, clockPin,
+         enable, reset, displayLength);    
+#endif             
 #endif
 int brightness = 15;        // screen brightness
 /*
@@ -238,31 +247,15 @@ void setup()
   unsigned char i;
   unsigned int counter_main = 0;
   float x, y, z;
-//  uint8_t val = 0xa5;
-  uint32_t val = 0xa5a5a5a5;
- 
-
-
+  
 // debugBreak();
-// whd_print_logbuffer();
-
-// pinMode(A4, OUTPUT);
-// pinMode(A5, OUTPUT);
-// pinPeripheral(A4, PIO_SERCOM_ALT);
-// pinPeripheral(A5, PIO_SERCOM_ALT);
-
-/// pinPeripheral(A4, PIO_OUTPUT);
-/// pinPeripheral(A5, PIO_OUTPUT);
-
-// pinPeripheral(PC_2, PIO_OUTPUT);
-
-// gpio_init_out(&gpio, PC_2);
-// gpio_init_out(&gpio, PC_3);
-
-
-// FastLED.addLeds<APA102,DATA_PIN,CLOCK_PIN,RGB,DATA_RATE_MHZ(1)>(leds,NUM_LEDS);
-
-
+/// whd_print_logbuffer();
+ pwm.setClockDivider(1, false); // Input clock is divided by 1 and sent to Generic Clock, Turbo is Off
+ pwm.timer(0, 1, 600, false);   // Timer 2 is set to Generic Clock divided by 1, resolution is 600, phase-correct aka dual-slope PWM 
+ 
+#ifndef PORTENTA_H7         // can't find <RingBuffer.h>
+  setDebugMessageLevel(3); // used to set a level of granularity in information output [0...4]
+#endif
 Serial.begin(115200);
 //  Serial1.begin(230400);
   delay(10);
@@ -282,11 +275,11 @@ Serial.begin(115200);
     counter_main++;
 
   } while ( !Serial && ( counter_main < SERIAL_COUNTER_TIME_OUT) );
-  #endif
+#endif
 
   pinMode(LED_BUILTIN, OUTPUT);
-// delay(5000);
-//  Serial.println("begin");
+
+  /// Serial.println();
   /// Serial.println();
 
   // lumex display is connected to Serial1
@@ -295,8 +288,8 @@ Serial.begin(115200);
   // Serial.println();
   // Serial.println();
 
-Serial1.begin(230400);
- // Serial1.begin(115200);
+// Serial1.begin(230400);
+ Serial1.begin(115200);
  // Serial1.flush();
 #if 0
   while (!Serial1) {
@@ -319,11 +312,16 @@ counter_main = 0;
 // whd_print_logbuffer();
 // whd_wifi_print_whd_log();
 #endif
- shiftOutMatrix(DATA_PIN, CLOCK_PIN, MSBFIRST, val);
+
 #ifdef USING_HCMS_DISPLAY
 pinMode(SHDN, OUTPUT);          // SHDN tied low with weak pull-down
 pinMode (HIGH_CURRENT_MODE, OUTPUT);  // gate of Q2 currently tied to A1 - N-Channel MOSFET so active high  xxx::: Linear Charger and LDO == HEAT
 pinMode(A3, INPUT);
+
+#if HCMS_DISPLAY_REV
+// pinMode(blank, OUTPUT);
+// pwm.analogWrite(blank, 400);
+#endif
 #endif
 
 #ifdef USING_LATEST_FIRMWARE
@@ -437,9 +435,17 @@ pinMode(A3, INPUT);
 	  delay(3);
   }
   myDisplay.home();
+
+
   
 #endif
-
+#ifdef USING_HCMS_DISPLAY 
+#if HCMS_DISPLAY_REV
+// pinMode(blank, OUTPUT);
+// digitalWrite(blank, LOW);
+// pwm.analogWrite(blank, dutyCycle);
+myDisplay.setBlankPin(4, 600);                // run PWM test on blank pin staring with 600 duty cycle
+#endif
   delay(1000);
 
   // init utc hr buffer
@@ -450,7 +456,8 @@ pinMode(A3, INPUT);
 
 // for charger/HCMS Display board
 
-#ifdef USING_HCMS_DISPLAY 
+
+
 digitalWrite(SHDN, HIGH);     // take charger out of shutdown
 digitalWrite(HIGH_CURRENT_MODE, HIGH);     // will enable high-current mode     /// maybe check for battery first....
 #endif
@@ -506,8 +513,8 @@ if (IMU.gyroscopeAvailable()) {
   }
   
   Serial.print("Temperature sensor sample rate = ");
-  Serial.print(IMU.temperatureSampleRate());
-  Serial.println(" Hz");
+//  Serial.print(IMU.temperatureSampleRate());
+//  Serial.println(" Hz");
   Serial.println();
   Serial.println("Temperature reading in degrees C");
   Serial.println("T");
@@ -545,7 +552,7 @@ void loop()
 //  int temp;
   unsigned char ones, tens = 0;
   static unsigned long counter_temp_disp;
-  static uint8_t val = 0;
+ 
 
   char c, b, a = 0;
  static unsigned char counter = 0;
@@ -560,8 +567,7 @@ void loop()
 
 // simple, fast parser to decode incoming packet from _udp server to display
 // todo:  check the checksum, currently, no checksum checking done.
-//  leds[0] = CRGB::White; FastLED.show(); delay(30);
-//	leds[0] = CRGB::Black; FastLED.show(); delay(30);
+
  // if (_udp.parsePacket()) {
 // debugBreak(); 
 if (_udp.parsePacket()) {
@@ -1907,7 +1913,6 @@ if (_udp.parsePacket()) {
  #ifdef USING_LUMEX_DISPLAY
 
             Write_AT_Command(ldmCmd);
-//            shiftOutMatrix(DATA_PIN, CLOCK_PIN, MSBFIRST, val++);
             //      MATRIX.stroke(0, 255, 0);               // green
  #endif
 #ifdef USING_ARDUINO_MATRIX
@@ -1968,7 +1973,27 @@ if (_udp.parsePacket()) {
 #ifdef USING_HCMS_DISPLAY    
 
   float temperature = TempZero.readInternalTemperature();
-    
+#if 1
+//  if ( flip_flop++ > 1 )
+  {
+
+//  pwm.analogWrite(blank, dutyCycle);  
+#ifdef HCMS_REV_B
+    myDisplay.setBlankPin(4, 600);          // continue with PWM test
+#endif    
+//  dutyCycle += 10;
+
+//  flip_flop = 0;
+
+  }
+
+
+//  if ( dutyCycle > 1000 )
+//      dutyCycle = 0;
+#endif      
+// Serial.print(dutyCycle);
+// Serial.println( " %");
+ 
   // if there are incoming bytes available
   // from the server, read them and print them:
 
@@ -2026,22 +2051,15 @@ if (IMU.temperatureAvailable()) {
 #endif
  
 
-    
-
    // if the LED is off turn it on and vice-versa:
     if (ledState == LOW) {
       ledState = HIGH;
-      val =+ 10;
     } else {
       ledState = LOW;
-      val =+1;
     }
 
     // set the LED with the ledState of the variable:
     digitalWrite(ledPin, ledState);
-
-   shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, val);
-
   }
 }  // end main loop()
 
