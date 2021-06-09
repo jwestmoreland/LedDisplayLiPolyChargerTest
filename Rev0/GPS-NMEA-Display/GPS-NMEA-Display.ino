@@ -20,6 +20,7 @@
 #define NOT_USING_MULTICAST 1
 
 #include <Arduino.h>
+#include "arduino_secrets.h"
 // #include <ThreadDebug.h>
 //
 // UartDebugCommInterface debugComm(SERIAL1_TX, SERIAL1_RX, 230400);
@@ -53,7 +54,7 @@
 #include <Arduino_MKRRGB.h>
 #endif
 
-#include "SECRET.H"
+
 
 #define USE_IMU_CODE 1      // modify for other than Nano 33 IOT
 
@@ -477,8 +478,8 @@ if (IMU.gyroscopeAvailable()) {
   }
   
   Serial.print("Temperature sensor sample rate = ");
-//   Serial.print(IMU.temperatureSampleRate());
-//  Serial.println(" Hz");
+   Serial.print(IMU.temperatureSampleRate());
+  Serial.println(" Hz");
   Serial.println();
   Serial.println("Temperature reading in degrees C");
   Serial.println("T");
@@ -1982,7 +1983,7 @@ if (_udp.parsePacket()) {
 
   }
 
-#if 0 
+#if 1 
 if (IMU.temperatureAvailable()) {
     // after IMU.readTemperature() returns, t will contain the temperature reading
     IMU.readTemperature(t);
