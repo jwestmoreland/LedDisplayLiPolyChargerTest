@@ -17,10 +17,36 @@
    If UsbDebugCommInterface is being used you can specify any baudrate.
 */
 
-// #define HCMS_DISPLAY_REV  1         // '2nd' rev of board
+#define HCMS_DISPLAY_REV  1         // '2nd' rev of board
 
 #include <Arduino.h>
+// *
+// Example program to illustrate how to display time on an RGB display based on NMEA data received via GPS.
+// Currently coded for PDT - you'll need to adjust for your timezone.
+// 
+// The source contained here goes with companion article for ARRL's QEX "A DIY NMEA Based GPS Time Display".
+// Author - John C. Westmoreland
+// Date -   April 27, 2020
+// *
 
+// #define PORTENTA_H7 1       // define if using PORTENTA
+
+// this header is to put your AP information:
+
+// the following are for normal operation from the AP the GPS receiver is attached to
+#ifdef PORTENTA_H7
+#define SECRET_WIFI_NAME (const char*)   "THEMIS_WS2"
+#define SECRET_PASSWORD  (const char*)   "1234567890AB"
+#else
+#define SECRET_WIFI_NAME "THEMIS_WS2"
+#define SECRET_PASSWORD  "1234567890AB"
+#endif
+// #define SECRET_WIFI_NAME (const char*)   "THEMIS_AT_WS"
+// #define SECRET_PASSWORD  (const char*)   "1234567890"
+
+// the following is for test purposes only
+#define SECRET_WIFI_NAME_TEST_MODE (const char*)   "AJ6BC-ARGUS"
+#define SECRET_PASSWORD_TEST_MODE  (const char*)   "4865D68D97D69C"
 
 // #include <ThreadDebug.h>
 //
@@ -57,7 +83,7 @@
 #include <Arduino_MKRRGB.h>
 #endif
 
-#include "SECRET.H"
+// #include "SECRET.H"
 
 #define USE_IMU_CODE 1      // modify for other than Nano 33 IOT
 
@@ -68,6 +94,15 @@
 
 #define USING_HCMS_DISPLAY 1      // if using HCMS Display
 
+#define csPin 10      // SPI CS
+#define i2cenPin 8   // low to use SPI
+#define datardyPin 9
+
+#if USING_HCMS_DISPLAY
+#include "RM3100.h"
+RM3100 rm3100;
+#endif
+
 // uncomment following if using the Lumex LDM-6432 RGB Display
 // #define USING_LUMEX_DISPLAY 1
 // #define USING_LATEST_FIRMWARE 1
@@ -77,7 +112,7 @@
 
 WiFiUDP _udp;
 
-static unsigned int dutyCycle = 0;
+// static unsigned int dutyCycle = 0;
 static unsigned char flip_flop = 0;
 
 // REDIRECT_STDOUT_TO(Serial1);
@@ -133,8 +168,8 @@ int ledState = LOW;             // ledState used to set the LED
 unsigned long previousMillis = 0;        // will store last time LED was updated
 
 // constants won't change:
-const long interval = 1000;           // interval at which to blink (milliseconds)
-
+const long interval = 2000; // 1000;           // interval at which to blink (milliseconds)
+// const long interval = 500;           // interval at which to blink (milliseconds)
 static unsigned int loop_ctr = 0;
 
 // char ldmCmd[] = "AT81=(0,0,TEST9876)";
@@ -203,7 +238,10 @@ static char local_counter = 0;
 // #define reset 6              // the display's reset pin
 #define blank 6                 // the display's blank pin
 #define reset 7              // the display's reset pin
-dutyCycle = 600;
+// dutyCycle = 600;
+
+
+
 #else
 #define reset 6              // the display's reset pin
 
@@ -277,7 +315,12 @@ Serial.begin(115200);
   } while ( !Serial && ( counter_main < SERIAL_COUNTER_TIME_OUT) );
 #endif
 
-  pinMode(LED_BUILTIN, OUTPUT);
+//  pinMode(LED_BUILTIN, OUTPUT);
+
+// #define csPin 10      // SPI CS
+// #define i2cenPin 9   // low to use SPI  
+
+  
 
   /// Serial.println();
   /// Serial.println();
@@ -286,7 +329,7 @@ Serial.begin(115200);
 
   //  Serial1.flush();
   // Serial.println();
-  // Serial.println();
+  // Serial.println()
 
 // Serial1.begin(230400);
  Serial1.begin(115200);
@@ -335,24 +378,24 @@ pinMode(A3, INPUT);
 #endif
   // We start by connecting to a WiFi network
 
-#if 1
+#if 0
   Serial1.println();
   Serial1.println();
   Serial1.print("Connecting to ");
   Serial1.println(ssid);
   delay(1000);
   #endif
-  WiFi.begin(ssid, password);
-  delay(10000);
+///  WiFi.begin(ssid, password);
+//  delay(10000);
 
-#if 1
+#if 0
   while (WiFi.status() != WL_CONNECTED) {
     delay(10000);
     Serial1.print(".");                        // send to console if taking too long to connect to WiFi...
     WiFi.begin(ssid, password);
   }
 #endif
-#if 1
+#if 0
   Serial1.println("");
   Serial1.println("WiFi connected");
   Serial1.println("IP address: ");
@@ -360,7 +403,7 @@ pinMode(A3, INPUT);
 
  Serial1.println("\nStarting connection to server...");
  #endif
-  _udp.beginMulticast(IPAddress(239, 192, 1, 2), 123);           ///*** Using Multicast
+////  _udp.beginMulticast(IPAddress(239, 192, 1, 2), 123);           ///*** Using Multicast
 //  Udp.begin(localPort);
   delay(100);
 
@@ -524,7 +567,12 @@ if (IMU.gyroscopeAvailable()) {
 #endif
   
 // set the digital pin as output:
-  pinMode(ledPin, OUTPUT); 
+ // pinMode(ledPin, OUTPUT); 
+// #define csPin 10      // SPI CS
+// #define i2cenPin 8   // low to use SPI  
+// pinMode(csPin, OUTPUT); 
+ pinMode(i2cenPin, OUTPUT); 
+ pinMode(datardyPin, INPUT);
 
 #if USE_IMU_CODE
  TempZero.init();
@@ -543,13 +591,24 @@ if (IMU.gyroscopeAvailable()) {
 #endif
 // whd_print_logbuffer();
 // debugBreak();  
+digitalWrite(i2cenPin, LOW);
+delay(10);
+SPI.begin();
+// SPI.beginTransaction(SPISettings(800000, MSBFIRST, SPI_MODE0));
+SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+// SPI.beginTransaction(SPISettings(800000, MSBFIRST, SPI_MODE0));
+    //Set sample rate
+    rm3100.SetSampleRateReg(1); //in Hz
+    rm3100.RunCMM(1);
+    rm3100.SelfTest();
+// SPI.endTransaction();
 } // end setup
 
 // this is the main even loop for the Arduino project
 void loop()
 {
 //  float flat, flon;
-//  int temp;
+  int temp;
   unsigned char ones, tens = 0;
   static unsigned long counter_temp_disp;
  
@@ -568,11 +627,14 @@ void loop()
 // simple, fast parser to decode incoming packet from _udp server to display
 // todo:  check the checksum, currently, no checksum checking done.
 
+
+
  // if (_udp.parsePacket()) {
 // debugBreak(); 
-if (_udp.parsePacket()) {
+//// if (_udp.parsePacket())
+{
  //    Serial.print(".");
-    while (_udp.available())
+////    while (_udp.available())
        
  // if (_udp.available())
   {
@@ -2059,7 +2121,32 @@ if (IMU.temperatureAvailable()) {
     }
 
     // set the LED with the ledState of the variable:
-    digitalWrite(ledPin, ledState);
+//   digitalWrite(ledPin, ledState);
+    delay(100);
+// SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+    rm3100.ReadRM3100();
+//     rm3100.SelfTest();
+// SPI.endTransaction();    
+#if 0
+// #define csPin 10      // SPI CS
+// #define i2cenPin 9   // low to use SPI 
+digitalWrite(i2cenPin, LOW);
+delay(100);
+digitalWrite(csPin, HIGH);
+delay(100);
+digitalWrite(csPin, LOW);
+delay(100);
+SPI.beginTransaction(SPISettings(800000, MSBFIRST, SPI_MODE0));
+SPI.transfer( (0xb4) );
+temp = SPI.transfer( 0x00 );
+SPI.endTransaction();
+// digitalWrite(csPin, HIGH);
+delay(50);
+digitalWrite(i2cenPin, LOW);
+delay(10);
+Serial.println(temp,HEX);
+#endif
+    
   }
 }  // end main loop()
 
