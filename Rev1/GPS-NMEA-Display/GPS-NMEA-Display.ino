@@ -573,6 +573,7 @@ if (IMU.gyroscopeAvailable()) {
 // pinMode(csPin, OUTPUT); 
  pinMode(i2cenPin, OUTPUT); 
  pinMode(datardyPin, INPUT);
+ attachInterrupt(digitalPinToInterrupt(datardyPin), dataRDYIRQ, RISING);
 
 #if USE_IMU_CODE
  TempZero.init();
@@ -2124,8 +2125,19 @@ if (IMU.temperatureAvailable()) {
 //   digitalWrite(ledPin, ledState);
     delay(100);
 // SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+    //Set sample rate
+    rm3100.SetSampleRateReg(1); //in Hz
+                
+    //Start to CMM run
+    rm3100.RunCMM(1);
+    //Clear Interrupt first
+    rm3100.ClearDrdyInt();
+       
+ //   rm3100.DisplayCycleCount();
+ rm3100.SetDrdyIntFlag(0);
     rm3100.ReadRM3100();
-//     rm3100.SelfTest();
+    rm3100.DisplayREVIDReg();
+     rm3100.SelfTest();
 // SPI.endTransaction();    
 #if 0
 // #define csPin 10      // SPI CS
@@ -2225,6 +2237,11 @@ static void Write_Matrix_String(char *string)
 #endif
 }
 #endif
+
+void dataRDYIRQ() {
+   rm3100.SetDrdyIntFlag(1);
+}
+
 
 
 // *eof

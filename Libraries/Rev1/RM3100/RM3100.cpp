@@ -159,14 +159,15 @@ void RM3100::ReadRM3100()
 
 //    __disable_irq();    // Disable Interrupts
 //    cs = 0;
+    noInterrupts();
     digitalWrite(SS, LOW);
     
     SPI.transfer(RM3100_MX_REG);
 
-///    Serial.print("Mag = 0x");
+    Serial.print("Mag = 0x");
     for (int i = 0; i < 9; i++) {
         mag[i] = SPI.transfer(0x00);
-///        Serial.print("%x", mag[i]);
+        Serial.print(mag[i], HEX);
         if ((i < 8) && ((i+1) % 3) == 0)
             Serial.print(" 0x");
     }
@@ -182,7 +183,7 @@ void RM3100::ReadRM3100()
             measurement = 0xFF;
         measurement <<= 24; //left shift 24-bit
         measurement |= (mag[j+2] | (mag[j+1] | (mag[j] << 8)) << 8);
-///        Serial.print("%d ", measurement);
+        Serial.print(measurement, HEX);
         count[index] = measurement;
         measurement = 0;
         index++;
@@ -191,23 +192,27 @@ void RM3100::ReadRM3100()
     Serial.print(", ");
     //Convert to uT (microTesla)
     for (int k = 0; k < 3; k++) {
-///        Serial.print("%5.3fuT ", (float)count[k]/current_gain[k]);
+	    Serial.print("uT: ");
+	    Serial.print((float)count[k]/current_gain[k]);
     }
 
     Serial.print("\n\r");
     
 //    __enable_irq();     // Enable Interrupts
+    interrupts();
 
 }
 
 void RM3100::SetDrdyIntFlag(u8 flag)
 {
 	rm3100_service_flag = flag;
-#if 0	
+#if 1	
     if (flag)
-        drdy.disable_irq();
+//        drdy.disable_irq();
+	    noInterrupts();  
     else
-	    drdy.enable_irq();
+//	    drdy.enable_irq();
+	    interrupts();
 #endif    
 }
 
@@ -224,7 +229,7 @@ void RM3100::ProcessDrdyInt()
 void RM3100::DrdyCallBack(void)
 {
     // attach ProcessDrdyInt function of this RM3100 instance
-///    drdy.rise(callback(this, &RM3100::ProcessDrdyInt)); 
+//    drdy.rise(callback(this, &RM3100::ProcessDrdyInt)); 
 }
 
 void RM3100::DisplayCycleCount()
@@ -235,6 +240,7 @@ void RM3100::DisplayCycleCount()
 
     //Read CC reg
 //    __disable_irq();    // Disable Interrupts
+    noInterrupts();
 //    cs = 0;
     digitalWrite(SS, LOW);
     int cc_reg = RM3100_CCXLSB_REG | 0x80; //"| 0x80" to read CC Reg
@@ -243,7 +249,7 @@ void RM3100::DisplayCycleCount()
     Serial.print("CC = 0x");
     for (int i = 0; i < 6; i++) {
         cc[i] = SPI.transfer(0);
-///        Serial.print("%x", cc[i]);
+        Serial.print(cc[i], HEX);
         if ((i < 5) && ((i+1) % 2) == 0)
             Serial.print(" 0x");
     }
@@ -261,6 +267,8 @@ void RM3100::DisplayCycleCount()
         temp |= (cc[j+1] | (cc[j] << 8));
         c_count[index++] = temp; //save CC values 
 ///        Serial.print("%d ", temp);
+	Serial.print("temp: ");
+	Serial.print(temp);
         temp = 0;
     }
 
@@ -270,6 +278,8 @@ void RM3100::DisplayCycleCount()
         if (c_count[k])
             current_gain[k] = c_count[k] * DEFAULTGAIN/DEFAULTCCOUNT;
 ///        Serial.print("%d ", current_gain[k]);
+	Serial.print("current gain:");
+	Serial.print(current_gain[k]);
     }
     
     //Calculate max sample rate, assume CC same for 3 axes
@@ -293,24 +303,32 @@ void RM3100::DisplayCycleCount()
         maxrate = (-4.0 * c_count[0] /5.0 + 550.0) / 3.0;
 
 ///    Serial.print("MaxRate = %3.2f Hz\n\r", maxrate);
+    Serial.print("MaxRate = ");
+    Serial.print(maxrate);
+    Serial.print(" Hz");
 
 //    __enable_irq();     // Enable Interrupts
+    interrupts();
 }
 
 void RM3100::DisplayREVIDReg()
 {
     //Read REVID reg
 //    __disable_irq();    // Disable Interrupts
+	noInterrupts();
 //    cs = 0;
     digitalWrite(SS, LOW);
     int reg = RM3100_REVID_REG;
     SPI.transfer(reg);
     int revid = SPI.transfer(0);
 //    __enable_irq();    // Enable Interrupts
+    interrupts();
 //    cs = 1;
     digitalWrite(SS, HIGH);
 
 ///    Serial.print("RM3100 REVID = %2D\n\r", revid);
+    Serial.print("RM3100 REVID = 0x");
+    Serial.print(revid, HEX);
 }
 
 void RM3100::SelfTest()
@@ -336,6 +354,7 @@ void RM3100::SelfTest()
 
     //Start Self Test
 //    __disable_irq();    // Disable Interrupts
+    noInterrupts();
 //    cs = 0;
     digitalWrite(SS, LOW);
 
@@ -349,8 +368,13 @@ void RM3100::SelfTest()
 //    cs = 0;
     SPI.transfer(RM3100_BIST_REG);
     SPI.transfer(regbist.reg);
-///    Serial.print("bist val= 0x%X, poll val = 0x%X \n\r", regbist.reg, regpoll.reg);
-    digitalWrite(SS, HIGH);
+///    Serial.print("bist val= 0x%X, poll val = 0x%X \n\r",
+///    regbist.reg, regpoll.reg);
+    Serial.print("bist val= 0x");
+    Serial.print(regbist.reg, HEX);
+    Serial.print("poll val= 0x");
+    Serial.print(regpoll.reg, HEX);
+     digitalWrite(SS, HIGH);
 
 //    cs = 1;
 
@@ -368,7 +392,10 @@ void RM3100::SelfTest()
 
     SPI.transfer(RM3100_STATUS_REG | 0x80);
     int value = SPI.transfer(0);
-///    Serial.print("Poll a measurement and Check status reg val = 0x%X \n\r", value);
+///    Serial.print("Poll a measurement and Check status reg val = 0x%X
+///    \n\r", value);
+    Serial.print("Poll a measurement and Check status reg val = 0x");
+    Serial.print(value, HEX);
     digitalWrite(SS, HIGH);
 
 //    cs = 1;
@@ -383,13 +410,18 @@ void RM3100::SelfTest()
     digitalWrite(SS, HIGH);
 	
 //        cs = 1;
-#if 0
+#if 1
         //Check result here
-        Serial.print("Check BIST reg 0x%X\n\r", value);
-        if (value & 0x70)
-            Serial.println("Result = 0x%X Pass\n\r", value);
-        else
-            Serial.println("Result = 0x%X Fail\n\r", value);
+    Serial.print("Check BIST reg 0x");
+    Serial.print(value,HEX);
+        if (value & 0x70) {
+		Serial.print("Result = 0x");
+	        Serial.print(value,HEX);
+	} else {
+		Serial.print("Result = 0x");
+		Serial.print(value, HEX);
+		Serial.print(" FAIL ");
+	}
 #endif
     } else
         Serial.print("Measurement not Ready\n\r");
@@ -403,6 +435,7 @@ void RM3100::SelfTest()
 //    cs = 1;
 
 //    __enable_irq();    // Enable Interrupts
+    interrupts();
 
 }
 
@@ -441,6 +474,7 @@ void RM3100::SetCycleCountReg()
 
         //Read CC reg
 //        __disable_irq();    // Disable Interrupts
+	noInterrupts();
 //        cs = 0;
     digitalWrite(SS, LOW);
         int cc_reg = RM3100_CCXLSB_REG;
@@ -454,6 +488,7 @@ void RM3100::SetCycleCountReg()
 //        cs = 1;
 
 //        __enable_irq();     // Enable Interrupts
+    interrupts();
     }
 }
 
