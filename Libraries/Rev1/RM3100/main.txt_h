@@ -1,0 +1,22 @@
+
+/**
+* @file         main.h
+*
+* @brief        Sample interface for RM3100.
+*
+* @authors      Betty Zhang
+* @date         05/21/2018
+* @copyright    (C) 2018 PNI Corp, Protonex LLC
+*
+* @copyright    Disclosure to third parties or reproduction in any form
+*               whatsoever, without prior written consent, is strictly forbidden
+*
+*/
+
+#include "mbed.h"
+
+#define REVISION "1.0"
+
+extern SPI spi;
+extern DigitalOut cs; //ssel
+extern Serial comport;

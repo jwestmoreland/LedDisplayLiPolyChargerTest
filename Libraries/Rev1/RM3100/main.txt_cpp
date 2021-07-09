@@ -1,0 +1,189 @@
+/**
+* @file         main.cpp
+*
+* @brief        Sample interface for RM3100.
+*
+* @authors      Betty Zhang
+* @date         05/21/2018
+* @copyright    (C) 2018 PNI Corp, Protonex LLC
+*
+* @copyright    Disclosure to third parties or reproduction in any form
+*               whatsoever, without prior written consent, is strictly forbidden
+*
+*/
+
+#include "mbed.h"
+#include "main.h"
+#include "RM3100.h"
+
+
+Serial comport(SERIAL_TX, SERIAL_RX);
+
+RM3100 rm3100;
+
+//Global variables
+int serial_inchar;
+float actual_rate;
+
+void OnSerial(void)
+{
+    serial_inchar = comport.getc();
+}
+
+//=============================================================================
+//  Serial input Character (Key) Commands, courtesy of JM.
+//=============================================================================
+// This function is called upon every incomming serial character 
+void processSerialInchar(char key)
+{
+    // The Simple Serial protocal mostly consists of single character commands
+    // send '?' to list available commands
+
+    serial_inchar = NULL;
+    int tmrc_val, rate;
+
+    switch (key) {
+        case '+':
+            rm3100.ChangeSampleRate(1);
+            break;
+
+        case '-':
+            rm3100.ChangeSampleRate(-1);
+            break;
+
+        case '>':
+            rm3100.ChangeCycleCount(1);
+            break;
+
+        case '<':
+            rm3100.ChangeCycleCount(-1);
+            break;
+
+        case 'a':
+            rm3100.DisplayREVIDReg();
+            break;
+        case 'b':
+            rate = rm3100.GetSampleRate(&tmrc_val);
+            comport.printf("Host process rate = %3.1f Hz, reqRate = %d, TMRC=0x%X\n\r",actual_rate, rate, tmrc_val);
+            break;
+        case 'c':
+            rm3100.DisplayCycleCount();
+            break;
+
+        case 'q':
+            rm3100.SelfTest();
+            break;
+        case 'r':
+            rm3100.RunCMM(1); //Run CMM
+            rm3100.ClearDrdyInt();
+            break;
+
+        case 's':
+            rm3100.RunCMM(0); //Stop
+            rate = rm3100.GetSampleRate(&tmrc_val);
+            comport.printf("Host process rate = %3.1f Hz, reqRate = %d, TMRC=0x%X\n\r",actual_rate, rate, tmrc_val);
+            break;
+
+        case '?': {
+            u8 bar[45];
+            memset(bar, 205, sizeof(bar));
+            bar[sizeof(bar)-1] = 0;
+            comport.printf("\n\r");
+            comport.printf("                  RM3100 Commands\n\r");
+            comport.printf("                  Revision: %s\n\r",REVISION);
+            comport.printf("  %c%s%c\n\r", 201, bar, 187);
+            comport.printf("  %c        Commands  (case sensitive)          %c\n\r", 186, 186);
+            // Status and configuration
+            comport.printf("  %c%s%c\n\r", 204, bar, 185);
+            comport.printf("  %c         Settings and Status                %c\n\r", 186, 186);
+            comport.printf("  %c%s%c\n\r", 204, bar, 185);
+            comport.printf("  %c a : Display REVID                          %c\n\r", 186, 186);
+            comport.printf("  %c b : Display host rate, request rate & TMRC %c\n\r", 186, 186);
+            comport.printf("  %c c : Display cycle count, gain & max rate   %c\n\r", 186, 186);
+            comport.printf("  %c + : Increase Sample Rate                   %c\n\r", 186, 186);
+            comport.printf("  %c - : Decrease Sample Rate                   %c\n\r", 186, 186);
+            comport.printf("  %c > : Increase Cycle Count                   %c\n\r", 186, 186);
+            comport.printf("  %c < : Decrease Cycle Count                   %c\n\r", 186, 186);
+
+            // Tests
+            comport.printf("  %c%s%c\n\r", 204, bar, 185);
+            comport.printf("  %c                  Tests                     %c\n\r", 186, 186);
+            comport.printf("  %c%s%c\n\r", 204, bar, 185);
+            comport.printf("  %c q : Run sensor Self tests                  %c\n\r", 186, 186);
+            comport.printf("  %c r : Run continous mode                     %c\n\r", 186, 186);
+            comport.printf("  %c s : Stop continous mode                    %c\n\r", 186, 186);
+
+            comport.printf("  %c%s%c\n\r", 200, bar, 188);
+
+        }
+        default:
+            break;
+    }
+}
+        
+int main() {
+    
+    int counter = 0;
+    Timer timer;
+    
+    
+    // Init user serial interface
+    comport.baud(921600);
+    comport.printf("\n\rRM3100 Host SPI Sample Code Ver %s on mBed\n\r",REVISION);
+        
+    //Set sample rate
+    rm3100.SetSampleRateReg(1); //in Hz
+                
+    //Start to CMM run
+    rm3100.RunCMM(1);
+   
+    // Setup interrupt callback functions
+    comport.attach(&OnSerial);  // user input from serial term 
+    
+    // Callback function to the rising edge
+    rm3100.DrdyCallBack();
+    
+    //Clear Interrupt first
+    rm3100.ClearDrdyInt();
+        
+    while (1) 
+    {
+
+        if (serial_inchar) 
+        {
+            processSerialInchar(serial_inchar); // process user key commands
+            serial_inchar = NULL;
+        }
+        
+        if (counter <= 1)
+            timer.start();
+        else if (counter >= 10)
+        {
+            timer.stop();
+            float time = timer.read();
+            actual_rate = 10.0/time;
+            if (actual_rate <= 150) {
+                __disable_irq();    // Disable Interrupts
+                comport.printf("Counter=%d, time=%3.3f s, Host Proc rate = %3.1f Hz\n\r",counter, time, actual_rate);
+                __enable_irq();    // Enable Interrupts
+            }
+            counter = 0;
+            timer.reset();
+        }
+        
+        //Process Drdy Interrupt
+        if (rm3100.GetDrdyIntFlag())
+        {
+            rm3100.SetDrdyIntFlag(0);
+            
+            //If sample rate is higher than 150Hz, serial port cannot process in time
+            //skip samples to make the host keep up, but to clear drdy interrupt
+            if ((actual_rate <= 150) || (counter == 1))
+                rm3100.ReadRM3100();
+            else
+                rm3100.ClearDrdyInt(); 
+            
+            counter++;
+        }
+    }
+}
