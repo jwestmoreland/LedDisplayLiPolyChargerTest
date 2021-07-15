@@ -20,6 +20,8 @@
 #define i2cenPin 8   // low to use SPI
 #define datardyPin 9
 
+extern void dataRDYIRQ();
+
 void RM3100::ClearDrdyInt()
 {
     //Clear Interrupt first
@@ -28,6 +30,7 @@ void RM3100::ClearDrdyInt()
     SPI.transfer(RM3100_STATUS_REG);
     int status = SPI.transfer(0x00);
 //    cs = 1;
+    delay(10);
     digitalWrite(SS, HIGH);
     if (status & 0x80)
     {
@@ -80,6 +83,7 @@ void RM3100::RunCMM(int flag)
     
     SPI.transfer(RM3100_CMM_REG);
     SPI.transfer(cmm_reg.reg);
+    delay(10);
     digitalWrite(SS, HIGH);
     
 //    cs = 1;
@@ -133,6 +137,7 @@ void RM3100::SetSampleRateReg(int rate)
     //set sample rate
     SPI.transfer(RM3100_TMRC_REG);
     SPI.transfer(value); //about 1Hz
+    delay(10);
     digitalWrite(SS, HIGH);
     
 //    cs = 1;
@@ -147,6 +152,7 @@ int RM3100::GetSampleRate(int *tmrc_reg_val)
     SPI.transfer(RM3100_TMRC_REG | 0x80); //Read TMRC reg
     * tmrc_reg_val = SPI.transfer(0);
 //    cs = 1;
+    delay(10);
     digitalWrite(SS, HIGH);
     
     return sample_rate;
@@ -154,7 +160,10 @@ int RM3100::GetSampleRate(int *tmrc_reg_val)
     
 void RM3100::ReadRM3100()
 {
-    int mag[9];
+	int magX[9];
+	int magY[9];
+	int magZ[9];
+	
     int count[3];
 
 //    __disable_irq();    // Disable Interrupts
@@ -164,37 +173,117 @@ void RM3100::ReadRM3100()
     
     SPI.transfer(RM3100_MX_REG);
 
-    Serial.print("Mag = 0x");
+    Serial.print("MagX = 0x");
     for (int i = 0; i < 9; i++) {
-        mag[i] = SPI.transfer(0x00);
-        Serial.print(mag[i], HEX);
+        magX[i] = SPI.transfer(0x00);
+        Serial.print(magX[i], HEX);
+        if ((i < 8) && ((i+1) % 3) == 0)
+            Serial.print(" 0x");
+    }
+    Serial.print("\n\r");
+//    cs = 1;
+    delay(10);
+    digitalWrite(SS, HIGH);
+    delay(100);
+    digitalWrite(SS, LOW);
+    
+    SPI.transfer(RM3100_MY_REG);
+
+    Serial.print("MagY = 0x");
+    for (int i = 0; i < 9; i++) {
+        magY[i] = SPI.transfer(0x00);
+        Serial.print(magY[i], HEX);
+        if ((i < 8) && ((i+1) % 3) == 0)
+            Serial.print(" 0x");
+    }
+    Serial.print("\n\r");
+//    cs = 1;
+    delay(10);
+    digitalWrite(SS, HIGH);
+    delay(100);   
+    digitalWrite(SS, LOW);
+    
+    SPI.transfer(RM3100_MZ_REG);
+
+    Serial.print("MagZ = 0x");
+    for (int i = 0; i < 9; i++) {
+        magZ[i] = SPI.transfer(0x00);
+        Serial.print(magZ[i], HEX);
         if ((i < 8) && ((i+1) % 3) == 0)
             Serial.print(" 0x");
     }
 //    cs = 1;
+    delay(10);
     digitalWrite(SS, HIGH);
+       
        
     Serial.print(", ");
     //Process the 24-bit signed measurement in count
     int measurement = 0;
     int index = 0;
     for (int j = 0; j < 9; j += 3) {
-        if (mag[j] & 0x80)
+        if (magX[j] & 0x80)
             measurement = 0xFF;
         measurement <<= 24; //left shift 24-bit
-        measurement |= (mag[j+2] | (mag[j+1] | (mag[j] << 8)) << 8);
+        measurement |= (magX[j+2] | (magX[j+1] | (magX[j] << 8)) << 8);
         Serial.print(measurement, HEX);
         count[index] = measurement;
         measurement = 0;
         index++;
     }
-
+    Serial.print("\n\r");  
     Serial.print(", ");
     //Convert to uT (microTesla)
     for (int k = 0; k < 3; k++) {
-	    Serial.print("uT: ");
+	    Serial.print("X - Axis: uT: ");
 	    Serial.print((float)count[k]/current_gain[k]);
     }
+    Serial.print("\n\r");  
+    Serial.print(", ");
+    //Process the 24-bit signed measurement in count
+    measurement = 0;
+    index = 0;
+    for (int j = 0; j < 9; j += 3) {
+        if (magY[j] & 0x80)
+            measurement = 0xFF;
+        measurement <<= 24; //left shift 24-bit
+        measurement |= (magY[j+2] | (magY[j+1] | (magY[j] << 8)) << 8);
+        Serial.print(measurement, HEX);
+        count[index] = measurement;
+        measurement = 0;
+        index++;
+    }
+    Serial.print("\n\r");  
+    Serial.print(", ");
+    //Convert to uT (microTesla)
+    for (int k = 0; k < 3; k++) {
+	    Serial.print("Y - Axis: uT: ");
+	    Serial.print((float)count[k]/current_gain[k]);
+    }
+
+    Serial.print("\n\r");  
+    Serial.print(", ");
+    //Process the 24-bit signed measurement in count
+    measurement = 0;
+    index = 0;
+    for (int j = 0; j < 9; j += 3) {
+        if (magZ[j] & 0x80)
+            measurement = 0xFF;
+        measurement <<= 24; //left shift 24-bit
+        measurement |= (magZ[j+2] | (magZ[j+1] | (magZ[j] << 8)) << 8);
+        Serial.print(measurement, HEX);
+        count[index] = measurement;
+        measurement = 0;
+        index++;
+    }
+    Serial.print("\n\r");  
+    Serial.print(", ");
+    //Convert to uT (microTesla)
+    for (int k = 0; k < 3; k++) {
+	    Serial.print("Z - Axis: uT: ");
+	    Serial.print((float)count[k]/current_gain[k]);
+    }
+
 
     Serial.print("\n\r");
     
@@ -209,10 +298,15 @@ void RM3100::SetDrdyIntFlag(u8 flag)
 #if 1	
     if (flag)
 //        drdy.disable_irq();
-	    noInterrupts();  
+//	    noInterrupts();
+	    detachInterrupt(digitalPinToInterrupt(datardyPin));
+//	    attachInterrupt(digitalPinToInterrupt(datardyPin), dataRDYIRQ, RISING);
+  
     else
 //	    drdy.enable_irq();
-	    interrupts();
+	//    interrupts();
+	    attachInterrupt(digitalPinToInterrupt(datardyPin), dataRDYIRQ, RISING);
+//    detachInterrupt(digitalPinToInterrupt(datardyPin));
 #endif    
 }
 
@@ -229,7 +323,8 @@ void RM3100::ProcessDrdyInt()
 void RM3100::DrdyCallBack(void)
 {
     // attach ProcessDrdyInt function of this RM3100 instance
-//    drdy.rise(callback(this, &RM3100::ProcessDrdyInt)); 
+//    drdy.rise(callback(this, &RM3100::ProcessDrdyInt));
+	attachInterrupt(digitalPinToInterrupt(datardyPin), dataRDYIRQ, RISING); 
 }
 
 void RM3100::DisplayCycleCount()
@@ -254,6 +349,7 @@ void RM3100::DisplayCycleCount()
             Serial.print(" 0x");
     }
 //    cs = 1;
+    delay(10);
     digitalWrite(SS, HIGH);
 
     Serial.print(", ");
@@ -324,6 +420,7 @@ void RM3100::DisplayREVIDReg()
 //    __enable_irq();    // Enable Interrupts
     interrupts();
 //    cs = 1;
+    delay(10);
     digitalWrite(SS, HIGH);
 
 ///    Serial.print("RM3100 REVID = %2D\n\r", revid);
@@ -362,7 +459,9 @@ void RM3100::SelfTest()
     SPI.transfer(RM3100_CMM_REG);
     SPI.transfer(0);
 //    cs = 1;
+    delay(10);
     digitalWrite(SS, HIGH);
+    delay(10);
     digitalWrite(SS, LOW);
 
 //    cs = 0;
@@ -374,6 +473,7 @@ void RM3100::SelfTest()
     Serial.print(regbist.reg, HEX);
     Serial.print("poll val= 0x");
     Serial.print(regpoll.reg, HEX);
+    delay(10);
      digitalWrite(SS, HIGH);
 
 //    cs = 1;
@@ -383,7 +483,9 @@ void RM3100::SelfTest()
     digitalWrite(SS, LOW);
     SPI.transfer(RM3100_POLL_REG);
     SPI.transfer(regpoll.reg);
+    delay(10);
     digitalWrite(SS, HIGH);
+    delay(10);
 //    cs = 1;
 
     //Get result
@@ -396,6 +498,7 @@ void RM3100::SelfTest()
 ///    \n\r", value);
     Serial.print("Poll a measurement and Check status reg val = 0x");
     Serial.print(value, HEX);
+    delay(10);
     digitalWrite(SS, HIGH);
 
 //    cs = 1;
@@ -407,6 +510,7 @@ void RM3100::SelfTest()
 
         SPI.transfer(RM3100_BIST_REG | 0x80);
 	value = SPI.transfer(0);
+    delay(10);
     digitalWrite(SS, HIGH);
 	
 //        cs = 1;
@@ -431,6 +535,7 @@ void RM3100::SelfTest()
     digitalWrite(SS, LOW);
     SPI.transfer(RM3100_BIST_REG);
     SPI.transfer(0);
+    delay(10);
     digitalWrite(SS, HIGH);
 //    cs = 1;
 
@@ -484,6 +589,7 @@ void RM3100::SetCycleCountReg()
             SPI.transfer((current_ccount[i] & 0xFF00)>>8); //MSB
             SPI.transfer(current_ccount[i] & 0x00FF); //LSB
         }
+    delay(10);
     digitalWrite(SS, HIGH);
 //        cs = 1;
 

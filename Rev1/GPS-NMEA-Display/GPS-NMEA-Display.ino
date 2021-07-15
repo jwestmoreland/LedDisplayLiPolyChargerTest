@@ -573,7 +573,7 @@ if (IMU.gyroscopeAvailable()) {
 // pinMode(csPin, OUTPUT); 
  pinMode(i2cenPin, OUTPUT); 
  pinMode(datardyPin, INPUT);
- attachInterrupt(digitalPinToInterrupt(datardyPin), dataRDYIRQ, RISING);
+// attachInterrupt(digitalPinToInterrupt(datardyPin), dataRDYIRQ, RISING);
 
 #if USE_IMU_CODE
  TempZero.init();
@@ -601,7 +601,10 @@ SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
     //Set sample rate
     rm3100.SetSampleRateReg(1); //in Hz
     rm3100.RunCMM(1);
-    rm3100.SelfTest();
+attachInterrupt(digitalPinToInterrupt(datardyPin), dataRDYIRQ, RISING);    
+//    rm3100.SelfTest();
+   //Clear Interrupt first
+    rm3100.ClearDrdyInt();      
 // SPI.endTransaction();
 } // end setup
 
@@ -2113,19 +2116,20 @@ if (IMU.temperatureAvailable()) {
   }
 #endif
  
-
+#if 1
    // if the LED is off turn it on and vice-versa:
     if (ledState == LOW) {
       ledState = HIGH;
     } else {
       ledState = LOW;
     }
-
+#endif
     // set the LED with the ledState of the variable:
 //   digitalWrite(ledPin, ledState);
     delay(100);
 // SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
     //Set sample rate
+#if 0    
     rm3100.SetSampleRateReg(1); //in Hz
                 
     //Start to CMM run
@@ -2138,6 +2142,7 @@ if (IMU.temperatureAvailable()) {
     rm3100.ReadRM3100();
     rm3100.DisplayREVIDReg();
      rm3100.SelfTest();
+#endif     
 // SPI.endTransaction();    
 #if 0
 // #define csPin 10      // SPI CS
@@ -2158,7 +2163,37 @@ digitalWrite(i2cenPin, LOW);
 delay(10);
 Serial.println(temp,HEX);
 #endif
-    
+
+unsigned long counter = 0;
+        //Process Drdy Interrupt
+//        if (rm3100.GetDrdyIntFlag())
+//         if ( digitalRead(datardyPin == HIGH ))
+//           if ( ledState == LOW )
+           {
+           if ( digitalRead(datardyPin) == HIGH )
+        {
+          rm3100.ReadRM3100();
+#if 1
+//          while ( digitalRead(datardyPin != LOW ))  { 
+             while ( digitalRead(datardyPin) != LOW )  { 
+            delay(1);
+            if (counter++ > 1000 )
+            break;
+            } ;
+            rm3100.ReadRM3100();
+            rm3100.SetDrdyIntFlag(0);
+#endif            
+            //If sample rate is higher than 150Hz, serial port cannot process in time
+            //skip samples to make the host keep up, but to clear drdy interrupt
+//            if ((actual_rate <= 150) || (counter == 1))
+//                if ( ledState == LOW )
+//                rm3100.ReadRM3100();
+//            else
+                rm3100.ClearDrdyInt(); 
+            
+//            counter++;
+        }
+           }    
   }
 }  // end main loop()
 

@@ -34,6 +34,8 @@ typedef unsigned long   u64;
 #define RM3100_CCZMSB_REG   0x09
 #define RM3100_TMRC_REG     0x0B /**< RW; Set data rate in continuous measurement mode*/
 #define RM3100_MX_REG       0x24 /**< RW; Measurement Result X-axis, Signed 24-bit */
+#define RM3100_MY_REG       0x27 // measurement results -- Y axis
+#define RM3100_MZ_REG       0x2A // measurement results -- Z axis
 #define RM3100_BIST_REG     0x33 /**< RW; Built-in self test */
 #define RM3100_STATUS_REG   0x34 /**< R; Status of DRDY */
 #define RM3100_REVID_REG    0x36 /**< R; Revision ID, default 0x22 */
