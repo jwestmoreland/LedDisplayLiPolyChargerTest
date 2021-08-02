@@ -98,7 +98,7 @@
 #define i2cenPin 8   // low to use SPI
 #define datardyPin 9
 
-#if USING_HCMS_DISPLAY
+#ifdef USING_HCMS_DISPLAY
 #include "RM3100.h"
 RM3100 rm3100;
 #endif

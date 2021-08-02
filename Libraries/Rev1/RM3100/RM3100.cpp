@@ -469,10 +469,11 @@ void RM3100::SelfTest()
     SPI.transfer(regbist.reg);
 ///    Serial.print("bist val= 0x%X, poll val = 0x%X \n\r",
 ///    regbist.reg, regpoll.reg);
-    Serial.print("bist val= 0x");
+    Serial.print("bist val = 0x");
     Serial.print(regbist.reg, HEX);
-    Serial.print("poll val= 0x");
+    Serial.print(" poll val = 0x");
     Serial.print(regpoll.reg, HEX);
+    Serial.print(" \n\r");
     delay(10);
      digitalWrite(SS, HIGH);
 
@@ -498,6 +499,7 @@ void RM3100::SelfTest()
 ///    \n\r", value);
     Serial.print("Poll a measurement and Check status reg val = 0x");
     Serial.print(value, HEX);
+    Serial.print("\n\r");
     delay(10);
     digitalWrite(SS, HIGH);
 
@@ -526,6 +528,7 @@ void RM3100::SelfTest()
 		Serial.print(value, HEX);
 		Serial.print(" FAIL ");
 	}
+	Serial.print("\n\r");
 #endif
     } else
         Serial.print("Measurement not Ready\n\r");
