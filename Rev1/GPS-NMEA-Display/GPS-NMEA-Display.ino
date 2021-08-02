@@ -2172,7 +2172,7 @@ unsigned long counter = 0;
            {
            if ( digitalRead(datardyPin) == HIGH )
         {
-          rm3100.ReadRM3100();
+//          rm3100.ReadRM3100();
 #if 1
 //          while ( digitalRead(datardyPin != LOW ))  { 
              while ( digitalRead(datardyPin) != LOW )  { 
