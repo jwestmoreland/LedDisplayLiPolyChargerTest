@@ -13,3 +13,6 @@ here.
 
 https://user-images.githubusercontent.com/2308903/122627791-b8c39880-d066-11eb-951c-569763963048.mp4
 
+
+Magnetometer Prototype:
+![PXL_20220307_122818594](https://user-images.githubusercontent.com/2308903/157034927-6da1927c-7655-4ce5-bc9b-93c087e1db65.jpg)
